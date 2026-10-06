@@ -8,7 +8,10 @@ const port = process.env.PORT || 3000;
 
 let qrCodeData = ''; 
 const usuariosEnProceso = {};
-let botInstanciado = false; // Variable de control para evitar duplicar el bot al reconectar
+let botInstanciado = false; 
+
+// ESCUDO ANTI-REINTENTOS: Guardamos los IDs de los últimos mensajes procesados
+const mensajesProcesados = new Set();
 
 app.get('/', (req, res) => {
     if (qrCodeData) {
@@ -36,7 +39,6 @@ app.listen(port, () => {
 });
 
 async function iniciarBot() {
-    // Si ya hay un bot corriendo, detenemos la creación de otro clon
     if (botInstanciado) return;
     botInstanciado = true;
 
@@ -59,7 +61,7 @@ async function iniciarBot() {
         }
 
         if (connection === 'close') {
-            botInstanciado = false; // Permitimos que se cree una nueva conexión limpia
+            botInstanciado = false; 
             const debeReconectar = lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut;
             if (debeReconectar) iniciarBot();
         } else if (connection === 'open') {
@@ -69,14 +71,26 @@ async function iniciarBot() {
     });
 
     sock.ev.on('messages.upsert', async (m) => {
-        // SOLUCIÓN AL DUPLICADO: Extraemos estrictamente el primer mensaje real [0]
-        const msg = m.messages[0];
+        const msg = m.messages[0]; // Tomamos estrictamente el primer mensaje de la tanda
         
-        // Evitamos que responda si no hay mensaje, si es una notificación del sistema o si lo envió el bot
         if (!msg || !msg.message || msg.key.fromMe) return;
-        
-        // Evitamos responder a los estados / historias de WhatsApp
         if (msg.key.remoteJid === 'status@broadcast') return;
+
+        // --- APLICAR EL ESCUDO ANTI-REINTENTOS ---
+        const idMensaje = msg.key.id;
+        if (mensajesProcesados.has(idMensaje)) {
+            console.log(`Mensaje repetido detectado e ignorado: ${idMensaje}`);
+            return; // Si el ID ya existe en la lista, frena el código y no responde doble
+        }
+        
+        // Guardamos el ID en la lista para recordarlo
+        mensajesProcesados.add(idMensaje);
+        
+        // Limpieza de memoria: Para que la lista no crezca infinitamente, borramos el ID tras 10 segundos
+        setTimeout(() => {
+            mensajesProcesados.delete(idMensaje);
+        }, 10000);
+        // -----------------------------------------
 
         const jid = msg.key.remoteJid;
         const textoCliente = (msg.message.conversation || msg.message.extendedTextMessage?.text || '').trim();
@@ -101,7 +115,7 @@ async function iniciarBot() {
             return;
         }
 
-        if (textoCliente.toLowerCase().includes('pedido') && textoCliente.toLowerCase().includes('total')) {
+        if (textoCliente.toLowerCase().includes('pedido') && textoCliente.toLowerCase().includes('carta') && textoCliente.toLowerCase().includes('total')) {
             await simularEscritura(2500);
             await sock.sendMessage(jid, { text: `📝 *¡Hemos recibido el resumen de tu pedido!*\n\nPor favor, dinos cómo prefieres disfrutar tu comida. Responde con el *NÚMERO* de la opción:\n\n*5.* 🛵 Delivery / Servicio a domicilio\n*6.* 🛍️ Pasar a buscar / Para llevar\n*7.* 🍽️ Comer allá / En el restaurante` });
             return;
@@ -134,7 +148,7 @@ async function iniciarBot() {
         } 
         else if (textoCliente === '1') {
             await simularEscritura(2000);
-            await sock.sendMessage(jid, { text: `🍔 *¡Excelente elección!*\n\nEntra a nuestro menú interactivo desde tu celular para elegir tus platos favoritos y calcular el total automáticamente:\n\n🔗 https://dthomasmenu.netlify.app/ \n\nAl finalizar, dale al botón de enviar orden y el sistema te regresará aquí con tu pedido organizado.` });
+            await sock.sendMessage(jid, { text: `🍔 *¡Excelente elección!*\n\nEntra a nuestro menú interactivo desde tu celular para elegir tus platos favoritos y calcular el total automáticamente:\n\n🔗 https://netlify.app \n\nAl finalizar, dale al botón de enviar orden y el sistema te regresará aquí con tu pedido organizado.` });
         } 
         else if (textoCliente === '2') {
             await simularEscritura(1500);
