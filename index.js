@@ -101,7 +101,7 @@ async function iniciarBot() {
             return;
         }
 
-        if (textoCliente.toLowerCase().includes('pedido') && textoCliente.toLowerCase().includes('carta') && textoCliente.toLowerCase().includes('total')) {
+        if (textoCliente.toLowerCase().includes('pedido') && textoCliente.toLowerCase().includes('total')) {
             await simularEscritura(2500);
             await sock.sendMessage(jid, { text: `📝 *¡Hemos recibido el resumen de tu pedido!*\n\nPor favor, dinos cómo prefieres disfrutar tu comida. Responde con el *NÚMERO* de la opción:\n\n*5.* 🛵 Delivery / Servicio a domicilio\n*6.* 🛍️ Pasar a buscar / Para llevar\n*7.* 🍽️ Comer allá / En el restaurante` });
             return;
