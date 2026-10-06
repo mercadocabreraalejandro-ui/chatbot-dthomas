@@ -8,6 +8,7 @@ const port = process.env.PORT || 3000;
 
 let qrCodeData = ''; 
 const usuariosEnProceso = {};
+let botInstanciado = false; // Variable de control para evitar duplicar el bot al reconectar
 
 app.get('/', (req, res) => {
     if (qrCodeData) {
@@ -35,6 +36,10 @@ app.listen(port, () => {
 });
 
 async function iniciarBot() {
+    // Si ya hay un bot corriendo, detenemos la creación de otro clon
+    if (botInstanciado) return;
+    botInstanciado = true;
+
     const { state, saveCreds } = await useMultiFileAuthState('auth_info_baileys');
     
     const sock = makeWASocket({
@@ -54,6 +59,7 @@ async function iniciarBot() {
         }
 
         if (connection === 'close') {
+            botInstanciado = false; // Permitimos que se cree una nueva conexión limpia
             const debeReconectar = lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut;
             if (debeReconectar) iniciarBot();
         } else if (connection === 'open') {
@@ -63,8 +69,14 @@ async function iniciarBot() {
     });
 
     sock.ev.on('messages.upsert', async (m) => {
+        // SOLUCIÓN AL DUPLICADO: Extraemos estrictamente el primer mensaje real [0]
         const msg = m.messages[0];
-        if (!msg.message || msg.key.fromMe) return;
+        
+        // Evitamos que responda si no hay mensaje, si es una notificación del sistema o si lo envió el bot
+        if (!msg || !msg.message || msg.key.fromMe) return;
+        
+        // Evitamos responder a los estados / historias de WhatsApp
+        if (msg.key.remoteJid === 'status@broadcast') return;
 
         const jid = msg.key.remoteJid;
         const textoCliente = (msg.message.conversation || msg.message.extendedTextMessage?.text || '').trim();
@@ -89,8 +101,7 @@ async function iniciarBot() {
             return;
         }
 
-       if (textoCliente.toLowerCase().includes('pedido') && textoCliente.toLowerCase().includes('carta') && textoCliente.toLowerCase().includes('total')) {
-
+        if (textoCliente.toLowerCase().includes('pedido') && textoCliente.toLowerCase().includes('carta') && textoCliente.toLowerCase().includes('total')) {
             await simularEscritura(2500);
             await sock.sendMessage(jid, { text: `📝 *¡Hemos recibido el resumen de tu pedido!*\n\nPor favor, dinos cómo prefieres disfrutar tu comida. Responde con el *NÚMERO* de la opción:\n\n*5.* 🛵 Delivery / Servicio a domicilio\n*6.* 🛍️ Pasar a buscar / Para llevar\n*7.* 🍽️ Comer allá / En el restaurante` });
             return;
@@ -106,7 +117,7 @@ async function iniciarBot() {
         if (textoCliente === '6') {
             usuariosEnProceso[jid] = 'ESPERANDO_DATOS_BUSCAR';
             await simularEscritura(2000);
-            await sock.sendMessage(jid, { text: `🛍️ *¡Perfecto, pasas a recoger por el local!*\n\nPor favor, envíanos los siguientes datos en un mensaje:\n\n• *Nombre:* (Para quién se anota la orden)\n• *Un humano te dira aprox a que hora puedes pasar a recoger tu pedido\n• *Método de pago:* (Efectivo o Tarjeta al retirar)` });
+            await sock.sendMessage(jid, { text: `🛍️ *¡Perfecto, pasas a recoger por el local!*\n\nPor favor, envíanos los siguientes datos en un mensaje:\n\n• *Nombre:* (Para quién se anota la orden)\n• *Un humano te dirá aproximadamente a qué hora puedes pasar a recoger tu pedido.*\n• *Método de pago:* (Efectivo o Tarjeta al retirar)` });
             return;
         }
 
@@ -123,7 +134,7 @@ async function iniciarBot() {
         } 
         else if (textoCliente === '1') {
             await simularEscritura(2000);
-            await sock.sendMessage(jid, { text: `🍔 *¡Excelente elección!*\n\nEntra a nuestro menú interactivo desde tu celular para elegir tus platos favoritos y calcular el total automáticamente:\n\n🔗 https://dthomasmenu.netlify.app/ \n\nAl finalizar, dale al botón de enviar orden y el sistema te regresará aquí con tu pedido organizado.` });
+            await sock.sendMessage(jid, { text: `🍔 *¡Excelente elección!*\n\nEntra a nuestro menú interactivo desde tu celular para elegir tus platos favoritos y calcular el total automáticamente:\n\n🔗 https://netlify.app \n\nAl finalizar, dale al botón de enviar orden y el sistema te regresará aquí con tu pedido organizado.` });
         } 
         else if (textoCliente === '2') {
             await simularEscritura(1500);
