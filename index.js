@@ -134,7 +134,7 @@ async function iniciarBot() {
         } 
         else if (textoCliente === '1') {
             await simularEscritura(2000);
-            await sock.sendMessage(jid, { text: `🍔 *¡Excelente elección!*\n\nEntra a nuestro menú interactivo desde tu celular para elegir tus platos favoritos y calcular el total automáticamente:\n\n🔗 https://netlify.app \n\nAl finalizar, dale al botón de enviar orden y el sistema te regresará aquí con tu pedido organizado.` });
+            await sock.sendMessage(jid, { text: `🍔 *¡Excelente elección!*\n\nEntra a nuestro menú interactivo desde tu celular para elegir tus platos favoritos y calcular el total automáticamente:\n\n🔗 https://dthomasmenu.netlify.app/ \n\nAl finalizar, dale al botón de enviar orden y el sistema te regresará aquí con tu pedido organizado.` });
         } 
         else if (textoCliente === '2') {
             await simularEscritura(1500);
