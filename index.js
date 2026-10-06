@@ -98,14 +98,14 @@ async function iniciarBot() {
         if (textoCliente === '5') {
             usuariosEnProceso[jid] = 'ESPERANDO_DATOS_DELIVERY';
             await simularEscritura(2000);
-            await sock.sendMessage(jid, { text: `🛵 *¡Excelente, seleccionaste Delivery!*\n\nPor favor, envíanos los siguientes datos en *UN SOLO MENSAJE*:\n\n• *Nombre:* (Quién recibe)\n• *Dirección exacta:* (Calle, residencial o negocio de referencia)\n• *Método de pago:* (Efectivo o Transferencia)` });
+            await sock.sendMessage(jid, { text: `🛵 *¡Excelente, seleccionaste Delivery!*\n\nPor favor, envíanos los siguientes datos en *UN SOLO MENSAJE*:\n\n• *Nombre:* (Quién recibe)\n• *Dirección exacta:* (Calle, residencial o negocio de referencia)\n• *Método de pago:* (Efectivo o Tarjeta)` });
             return;
         }
 
         if (textoCliente === '6') {
             usuariosEnProceso[jid] = 'ESPERANDO_DATOS_BUSCAR';
             await simularEscritura(2000);
-            await sock.sendMessage(jid, { text: `🛍️ *¡Perfecto, pasas a recoger por el local!*\n\nPor favor, envíanos los siguientes datos en un mensaje:\n\n• *Nombre:* (Para quién se anota la orden)\n• *Hora estimada:* (A qué hora pasarás por el local)\n• *Método de pago:* (Efectivo o Transferencia al retirar)` });
+            await sock.sendMessage(jid, { text: `🛍️ *¡Perfecto, pasas a recoger por el local!*\n\nPor favor, envíanos los siguientes datos en un mensaje:\n\n• *Nombre:* (Para quién se anota la orden)\n• *Un humano te dira aprox a que hora puedes pasar a recoger tu pedido\n• *Método de pago:* (Efectivo o Tarjeta al retirar)` });
             return;
         }
 
