@@ -95,14 +95,14 @@ async function iniciarBot() {
             await sock.sendMessage(jid, { text: 
                 `🍔 *¡Excelente elección!*\n\n` +
                 `Entra a nuestro menú interactivo desde tu celular para elegir tus platos favoritos y calcular el total automáticamente:\n\n` +
-                `🔗 https://netlify.app \n\n` +
+                `🔗 https://dthomasmenu.netlify.app/ \n\n` +
                 `Al finalizar, dale al botón de enviar orden y el sistema te regresará aquí con tu pedido organizado.`
             });
         } 
         // Opción 2: Horarios
         else if (textoCliente === '2') {
             await simularEscritura(1500);
-            await sock.sendMessage(jid, { text: `🕒 *D'Thomas Restaurante:*\nEstamos abiertos todos los días de *11:30 AM a 10:00 PM*. ¡Te esperamos!` });
+            await sock.sendMessage(jid, { text: `🕒 *D'Thomas Restaurante:*\nEstamos abiertos los lunes de *7:45AM a 9:30PM*.\n *De martes a viernes de *7:00AM a 10:00AM*\n *Los sabados y domingos de *7:00AM a 4:00PM* ¡Te esperamos!` });
         } 
         // Opción 3: Ubicación
         else if (textoCliente === '3') {
