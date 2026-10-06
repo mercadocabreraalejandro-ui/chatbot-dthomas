@@ -34,13 +34,12 @@ app.listen(port, () => {
     console.log(`Entra al enlace de Render para escanear el código QR`);
 });
 
-// 2. Configuración del cliente de WhatsApp (Corregido con la ruta exacta para Linux en Render)
+// 2. Configuración del cliente de WhatsApp (Limpiado para que busque el Chrome interno de Render)
 const client = new Client({
     authStrategy: new LocalAuth(),
     puppeteer: {
         headless: true,
-        // ESTA LÍNEA ES LA SOLUCIÓN DEFINITIVA PARA LA NUBE
-        executablePath: '/usr/bin/google-chrome-stable',
+        // Dejamos que Puppeteer busque solo el navegador descargado automáticamente en el proyecto
         args: [
             '--no-sandbox',
             '--disable-setuid-sandbox',
