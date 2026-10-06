@@ -1,15 +1,16 @@
-const { Client, LocalAuth } = require('whatsapp-web.js');
+const makeWASocket = require('@whiskeysockets/baileys').default;
+const { useMultiFileAuthState, DisconnectReason } = require('@whiskeysockets/baileys');
 const qrcode = require('qrcode');
 const express = require('express');
+const pino = require('pino');
 const app = express();
 const port = process.env.PORT || 3000;
 
-let qrCodeData = ''; // Variable global donde guardamos el texto del QR
+let qrCodeData = ''; // Variable global para guardar el texto del QR
 
 // 1. Servidor Web Express para ver el código QR en el navegador
 app.get('/', (req, res) => {
     if (qrCodeData) {
-        // Si hay un QR activo, lo convierte en una imagen visible en HTML
         qrcode.toDataURL(qrCodeData, (err, url) => {
             res.send(`
                 <div style="text-align:center; font-family:sans-serif; margin-top:50px;">
@@ -31,88 +32,94 @@ app.get('/', (req, res) => {
 
 app.listen(port, () => {
     console.log(`Servidor encendido en el puerto ${port}`);
-    console.log(`Entra al enlace de Render para escanear el código QR`);
 });
 
-// 2. Configuración del cliente de WhatsApp (Limpiado para que busque el Chrome interno de Render)
-const client = new Client({
-    authStrategy: new LocalAuth(),
-    puppeteer: {
-        headless: true,
-        // Dejamos que Puppeteer busque solo el navegador descargado automáticamente en el proyecto
-        args: [
-            '--no-sandbox',
-            '--disable-setuid-sandbox',
-            '--disable-dev-shm-usage',
-            '--no-first-run',
-            '--no-zygote',
-            '--single-process',
-            '--disable-gpu'
-        ]
-    }
-});
+// 2. Iniciar la conexión de WhatsApp sin necesidad de Chrome / Puppeteer
+async function iniciarBot() {
+    const { state, saveCreds } = await useMultiFileAuthState('auth_info_baileys');
+    
+    const sock = makeWASocket({
+        logger: pino({ level: 'silent' }), // Apaga los logs molestos en consola
+        auth: state,
+        printQRInTerminal: false
+    });
 
-// Escucha cuando WhatsApp genera un nuevo código de vinculación
-client.on('qr', (qr) => {
-    qrCodeData = qr;
-    console.log('--- ¡NUEVO CÓDIGO QR GENERADO! Míralo en tu enlace de Render ---');
-});
+    // Guardar credenciales de sesión automáticamente al escanear
+    sock.ev.on('creds.update', saveCreds);
 
-// Escucha cuando el celular se vincula con éxito
-client.on('ready', () => {
-    qrCodeData = ''; // Borramos el QR de la página web porque ya se conectó
-    console.log('🚀 ¡Felicidades! El chatbot está en línea y funcionando perfectamente.');
-});
+    // Escuchar el estado de la conexión e hilos de QR
+    sock.ev.on('connection.update', (update) => {
+        const { connection, lastDisconnect, qr } = update;
+        
+        if (qr) {
+            qrCodeData = qr; // Guardamos el código QR generado
+            console.log('--- ¡NUEVO CÓDIGO QR GENERADO! Míralo en tu enlace de Render ---');
+        }
 
-// 3. Cerebro del menú interactivo numérico (Con retraso anti-bloqueo)
-client.on('message', async (msg) => {
-    const mensajeCliente = msg.body.trim();
+        if (connection === 'close') {
+            const debeReconectar = lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut;
+            console.log('Conexión cerrada. ¿Reconectando?:', debeReconectar);
+            if (debeReconectar) iniciarBot(); // Si se cae la red, se reconecta solo
+        } else if (connection === 'open') {
+            qrCodeData = ''; // Borramos el QR porque ya se conectó
+            console.log('🚀 ¡Felicidades! El chatbot de D\'Thomas está conectado perfectamente.');
+        }
+    });
 
-    // Función interna para simular escritura humana (espera en milisegundos)
-    const simularEscritura = ms => new Promise(res => setTimeout(res, ms));
+    // 3. Cerebro del menú interactivo (Escuchador de mensajes recibidos)
+    sock.ev.on('messages.upsert', async (m) => {
+        const msg = m.messages[0];
+        if (!msg.message || msg.key.fromMe) return; // Ignorar si no tiene texto o si el mensaje lo mandó el bot
 
-    // Si el mensaje recibido NO es un número (es un saludo o texto cualquiera)
-    if (isNaN(mensajeCliente)) {
-        await simularEscritura(2500); // Simula escribir por 2.5 segundos
-        await client.sendMessage(msg.from, 
-            `¡Hola! Bienvenido al asistente inteligente de *D'Thomas Restaurante* 🍔🔥\n\n` +
-            `Por favor, responde escribiendo únicamente el *NÚMERO* de la opción que necesitas:\n\n` +
-            `*1.* 📦 Ver menú y Armar mi pedido (Online)\n` +
-            `*2.* 🕒 Ver Horarios de apertura\n` +
-            `*3.* 📍 Ubicación exacta\n` +
-            `*4.* 📞 Hablar con un agente humano`
-        );
-    } 
-    // Opción 1: Enlace a tu menú de Netlify
-    else if (mensajeCliente === '1') {
-        await simularEscritura(2000);
-        await client.sendMessage(msg.from, 
-            `🍔 *¡Excelente elección!*\n\n` +
-            `Entra a nuestro menú interactivo desde tu celular para elegir tus platos favoritos y calcular el total automáticamente:\n\n` +
-            `🔗 https://netlify.app \n\n` +
-            `Al finalizar, dale al botón de enviar orden y el sistema te regresará aquí con tu pedido organizado.`
-        );
-    } 
-    // Opción 2: Ver horarios
-    else if (mensajeCliente === '2') {
-        await simularEscritura(1500);
-        await client.sendMessage(msg.from, `🕒 *D'Thomas Restaurante:*\nEstamos abiertos todos los días de *11:30 AM a 10:00 PM*. ¡Te esperamos!`);
-    } 
-    // Opción 3: Ubicación física
-    else if (mensajeCliente === '3') {
-        await simularEscritura(1500);
-        await client.sendMessage(msg.from, `📍 *Nuestra Ubicación:*\nResidencial Luigi II, Av. República de Argentina, Santiago de los Caballeros.`);
-    } 
-    // Opción 4: Soporte humano
-    else if (mensajeCliente === '4') {
-        await simularEscritura(1500);
-        await client.sendMessage(msg.from, `🔔 *Entendido.* He notificado a nuestro equipo. Un agente humano revisará este chat en un momento para atenderte de forma personalizada. ¡Gracias por tu paciencia!`);
-    } 
-    // Si meten cualquier otra opción numérica inválida (ejemplo: 5)
-    else {
-        await simularEscritura(1000);
-        await client.sendMessage(msg.from, `❌ Esa opción no existe. Por favor, escribe un número del *1 al 4* según el menú anterior.`);
-    }
-});
+        const jid = msg.key.remoteJid;
+        // Obtener el texto del mensaje ya sea de un chat normal o una respuesta extendida
+        const textoCliente = (msg.message.conversation || msg.message.extendedTextMessage?.text || '').trim();
+        
+        const simularEscritura = ms => new Promise(res => setTimeout(res, ms));
 
-client.initialize();
+        // Si el mensaje NO es un número (es un saludo)
+        if (isNaN(textoCliente) || textoCliente === '') {
+            await simularEscritura(2500);
+            await sock.sendMessage(jid, { text: 
+                `¡Hola! Bienvenido al asistente inteligente de *D'Thomas Restaurante* 🍔🔥\n\n` +
+                `Por favor, responde escribiendo únicamente el *NÚMERO* de la opción que necesitas:\n\n` +
+                `*1.* 📦 Ver menú y Armar mi pedido (Online)\n` +
+                `*2.* 🕒 Ver Horarios de apertura\n` +
+                `*3.* 📍 Ubicación exacta\n` +
+                `*4.* 📞 Hablar con un agente humano`
+            });
+        } 
+        // Opción 1: Enlace de tu menú web
+        else if (textoCliente === '1') {
+            await simularEscritura(2000);
+            await sock.sendMessage(jid, { text: 
+                `🍔 *¡Excelente elección!*\n\n` +
+                `Entra a nuestro menú interactivo desde tu celular para elegir tus platos favoritos y calcular el total automáticamente:\n\n` +
+                `🔗 https://netlify.app \n\n` +
+                `Al finalizar, dale al botón de enviar orden y el sistema te regresará aquí con tu pedido organizado.`
+            });
+        } 
+        // Opción 2: Horarios
+        else if (textoCliente === '2') {
+            await simularEscritura(1500);
+            await sock.sendMessage(jid, { text: `🕒 *D'Thomas Restaurante:*\nEstamos abiertos todos los días de *11:30 AM a 10:00 PM*. ¡Te esperamos!` });
+        } 
+        // Opción 3: Ubicación
+        else if (textoCliente === '3') {
+            await simularEscritura(1500);
+            await sock.sendMessage(jid, { text: `📍 *Nuestra Ubicación:*\nResidencial Luigi II, Av. República de Argentina, Santiago de los Caballeros.` });
+        } 
+        // Opción 4: Soporte
+        else if (textoCliente === '4') {
+            await simularEscritura(1500);
+            await sock.sendMessage(jid, { text: `🔔 *Entendido.* He notificado a nuestro equipo. Un agente humano revisará este chat en un momento para atenderte de forma personalizada. ¡Gracias por tu paciencia!` });
+        } 
+        // Opción inválida
+        else {
+            await simularEscritura(1000);
+            await sock.sendMessage(jid, { text: `❌ Esa opción no existe. Por favor, escribe un número del *1 al 4* según el menú anterior.` });
+        }
+    });
+}
+
+iniciarBot();
