@@ -34,12 +34,13 @@ app.listen(port, () => {
     console.log(`Entra al enlace de Render para escanear el código QR`);
 });
 
-// 2. Configuración del cliente de WhatsApp (Optimizado al 100% para Linux en Render)
+// 2. Configuración del cliente de WhatsApp (Corregido con la ruta exacta para Linux en Render)
 const client = new Client({
     authStrategy: new LocalAuth(),
     puppeteer: {
         headless: true,
-        // No agregamos la ruta executablePath de Windows para evitar el error en la nube
+        // ESTA LÍNEA ES LA SOLUCIÓN DEFINITIVA PARA LA NUBE
+        executablePath: '/usr/bin/google-chrome-stable',
         args: [
             '--no-sandbox',
             '--disable-setuid-sandbox',
