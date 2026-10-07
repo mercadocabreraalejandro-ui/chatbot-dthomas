@@ -8,9 +8,9 @@ const port = process.env.PORT || 3000;
 
 let qrCodeData = ''; 
 const usuariosEnProceso = {};
-let botInstanciado = false; // Candado para evitar que se creen clones del bot al parpadear la red
+let botInstanciado = false; // Evita clones del bot en memoria
 
-// ESCUDO DE TIEMPO ANTI-DUPLICADOS (Guarda la hora exacta de la última respuesta por usuario)
+// ESCUDO DE TIEMPO: Guarda los milisegundos de la última respuesta por usuario
 const ultimasRespuestas = {};
 
 // 1. Servidor Web Express para ver el código QR en el navegador de Render
@@ -39,15 +39,15 @@ app.listen(port, () => {
     console.log(`Servidor encendido en el puerto ${port}`);
 });
 
-// 2. Iniciar la conexión de WhatsApp sin necesidad de Chrome / Puppeteer (Utilizando Baileys)
+// 2. Iniciar la conexión de WhatsApp sin necesidad de Chrome / Puppeteer
 async function iniciarBot() {
-    if (botInstanciado) return; // Si ya hay un bot corriendo, frena la duplicación de procesos
+    if (botInstanciado) return; 
     botInstanciado = true;
 
     const { state, saveCreds } = await useMultiFileAuthState('auth_info_baileys');
     
     const sock = makeWASocket({
-        logger: pino({ level: 'silent' }), // Apaga los logs internos molestos de Baileys
+        logger: pino({ level: 'silent' }),
         auth: state,
         printQRInTerminal: false
     });
@@ -63,34 +63,33 @@ async function iniciarBot() {
         }
 
         if (connection === 'close') {
-            botInstanciado = false; // Abre el candado para permitir una reconexión limpia
+            botInstanciado = false; 
             const debeReconectar = lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut;
             if (debeReconectar) iniciarBot();
         } else if (connection === 'open') {
-            qrCodeData = ''; // Borramos el QR porque ya se enlazó el WhatsApp
+            qrCodeData = ''; 
             console.log('🚀 ¡Felicidades! El chatbot de D\'Thomas está conectado perfectamente.');
         }
     });
 
     // 3. Cerebro del menú interactivo (Escuchador de mensajes recibidos)
     sock.ev.on('messages.upsert', async (m) => {
-        const msg = m.messages[0]; // Tomamos estrictamente el primer mensaje real del paquete
+        const msg = m.messages[0]; // Tomamos estrictamente el primer mensaje real
         
         if (!msg || !msg.message || msg.key.fromMe) return;
-        if (msg.key.remoteJid === 'status@broadcast') return; // Evita responder a las historias de WhatsApp
+        if (msg.key.remoteJid === 'status@broadcast') return; 
 
         const jid = msg.key.remoteJid;
-        const ahora = Date.now(); // Captura el tiempo actual exacto en milisegundos
+        const ahora = Date.now(); 
 
         // ====================================================
-        // ESCUDO FILTRO DE TIEMPO ANTI-DUPLICADOS POR USUARIO
+        // FILTRO DE TIEMPO ANTI-DUPLICADOS POR USUARIO
         // ====================================================
         if (ultimasRespuestas[jid] && (ahora - ultimasRespuestas[jid] < 2000)) {
-            console.log(`Mensaje duplicado o ráfaga de datos de ${jid} bloqueada por tiempo.`);
-            return; // Si pasaron menos de 2 segundos desde la última respuesta, destruye la petición
+            console.log(`Mensaje duplicado bloqueado por tiempo para: ${jid}`);
+            return; // Bloquea ráfagas de mensajes menores a 2 segundos
         }
         
-        // Guardamos o actualizamos la marca de tiempo de la respuesta para este usuario
         ultimasRespuestas[jid] = ahora;
         // ====================================================
 
@@ -102,7 +101,7 @@ async function iniciarBot() {
         // ====================================================
         if (usuariosEnProceso[jid]) {
             const pasoActual = usuariosEnProceso[jid];
-            await simularEscritura(3000); // Simula escribir por 3 segundos
+            await simularEscritura(3000); 
 
             if (pasoActual === 'ESPERANDO_DATOS_DELIVERY') {
                 await sock.sendMessage(jid, { text: `🎉 *¡Listo! Tu pedido ha sido procesado con éxito.* \n\nEl motorista de D'Thomas ya está preparando la ruta para llevar tu comida a domicilio. El tiempo estimado es de 30 a 45 minutos. \n\n¡Muchas gracias por ordenar con nosotros! 🛵🍔🔥` });
@@ -114,12 +113,12 @@ async function iniciarBot() {
                 await sock.sendMessage(jid, { text: `🎉 *¡Listo! Tu mesa y pedido han sido reservados con éxito.* \n\nNuestros cocineros tienen tu orden lista en el sistema para marcharla. Nos vemos en breve en el restaurante.\n\n¡Buen provecho por adelantado! 🍽️🔥` });
             }
 
-            delete usuariosEnProceso[jid]; // Limpiamos la memoria de la pizarra RAM para este cliente
+            delete usuariosEnProceso[jid]; 
             return;
         }
 
         // ====================================================
-        // TRUCO DETECTOR DE TU WEB EN NETLIFY
+        // DETECTOR DE TU WEB EN NETLIFY
         // ====================================================
         if (textoCliente.toLowerCase().includes('pedido') && textoCliente.toLowerCase().includes('carta') && textoCliente.toLowerCase().includes('total')) {
             await simularEscritura(2500);
@@ -131,21 +130,21 @@ async function iniciarBot() {
         // SELECCIÓN DE MODALIDAD Y ACTIVACIÓN DE ESTADOS
         // ====================================================
         if (textoCliente === '5') {
-            usuariosEnProceso[jid] = 'ESPERANDO_DATOS_DELIVERY'; // El bot activa su memoria
+            usuariosEnProceso[jid] = 'ESPERANDO_DATOS_DELIVERY'; 
             await simularEscritura(2000);
             await sock.sendMessage(jid, { text: `🛵 *¡Excelente, seleccionaste Delivery!*\n\nPor favor, envíanos los siguientes datos en *UN SOLO MENSAJE*:\n\n• *Nombre:* (Quién recibe)\n• *Dirección exacta:* (Calle, residencial o negocio de referencia)\n• *Método de pago:* (Efectivo o Tarjeta)` });
             return;
         }
 
         if (textoCliente === '6') {
-            usuariosEnProceso[jid] = 'ESPERANDO_DATOS_BUSCAR'; // El bot activa su memoria
+            usuariosEnProceso[jid] = 'ESPERANDO_DATOS_BUSCAR'; 
             await simularEscritura(2000);
             await sock.sendMessage(jid, { text: `🛍️ *¡Perfecto, pasas a recoger por el local!*\n\nPor favor, envíanos los siguientes datos en un mensaje:\n\n• *Nombre:* (Para quién se anota la orden)\n• *Un humano te dirá aproximadamente a qué hora puedes pasar a recoger tu pedido.*\n• *Método de pago:* (Efectivo o Tarjeta al retirar)` });
             return;
         }
 
         if (textoCliente === '7') {
-            usuariosEnProceso[jid] = 'ESPERANDO_DATOS_ALLA'; // El bot activa su memoria
+            usuariosEnProceso[jid] = 'ESPERANDO_DATOS_ALLA'; 
             await simularEscritura(2000);
             await sock.sendMessage(jid, { text: `🍽️ *¡Genial, te esperamos en el restaurante!*\n\nPor favor, confírmanos en un mensaje:\n\n• *Nombre:* (Para la reserva de la mesa)\n• *Número de personas:* (Cuántos los acompañan a comer)` });
             return;
@@ -168,3 +167,17 @@ async function iniciarBot() {
         } 
         else if (textoCliente === '3') {
             await simularEscritura(1500);
+            await sock.sendMessage(jid, { text: `📍 *Nuestra Ubicación:*\nResidencial Luigi II, Av. República de Argentina, Santiago de los Caballeros.` });
+        } 
+        else if (textoCliente === '4') {
+            await simularEscritura(1500);
+            await sock.sendMessage(jid, { text: `🔔 *Entendido.* He notificado a nuestro equipo. Un agente humano revisará este chat en un momento para atenderte de forma personalizada. ¡Gracias por tu paciencia!` });
+        } 
+        else {
+            await simularEscritura(1000);
+            await sock.sendMessage(jid, { text: `❌ Esa opción no existe. Por favor, escribe un número del *1 al 4* según el menú anterior.` });
+        }
+    });
+}
+
+iniciarBot();
